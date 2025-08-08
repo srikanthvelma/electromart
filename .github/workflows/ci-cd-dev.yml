@@ -1,0 +1,392 @@
+name: ElectroMart CI/CD - Dev Environment
+
+on:
+  push:
+    branches: [ dev, develop ]
+  pull_request:
+    branches: [ dev, develop ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - staging
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # Code Quality and Testing
+  code-quality:
+    name: Code Quality & Testing
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+        
+    - name: Install dependencies - Frontend
+      run: |
+        cd services/frontend
+        npm ci
+        
+    - name: Install dependencies - API Gateway
+      run: |
+        cd services/api-gateway
+        npm ci
+        
+    - name: Install dependencies - User Service
+      run: |
+        cd services/user-service
+        npm ci
+        
+    - name: Install dependencies - Payment Service
+      run: |
+        cd services/payment-service
+        npm ci
+        
+    - name: Install dependencies - Product Service
+      run: |
+        cd services/product-service
+        pip install -r requirements.txt
+        
+    - name: Install dependencies - Search Service
+      run: |
+        cd services/search-service
+        pip install -r requirements.txt
+        
+    - name: Install dependencies - Notification Service
+      run: |
+        cd services/notification-service
+        pip install -r requirements.txt
+        
+    - name: Install dependencies - Order Service
+      run: |
+        cd services/order-service
+        mvn dependency:go-offline
+        
+    - name: Run tests - Frontend
+      run: |
+        cd services/frontend
+        npm test -- --watchAll=false
+        
+    - name: Run tests - API Gateway
+      run: |
+        cd services/api-gateway
+        npm test
+        
+    - name: Run tests - User Service
+      run: |
+        cd services/user-service
+        npm test
+        
+    - name: Run tests - Payment Service
+      run: |
+        cd services/payment-service
+        npm test
+        
+    - name: Run tests - Product Service
+      run: |
+        cd services/product-service
+        python -m pytest tests/ -v
+        
+    - name: Run tests - Order Service
+      run: |
+        cd services/order-service
+        mvn test
+        
+    - name: Security scan
+      uses: snyk/actions/node@master
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: --severity-threshold=high
+      continue-on-error: true
+
+  # Build and Push Docker Images
+  build-and-push:
+    name: Build and Push Images
+    needs: code-quality
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api-gateway
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/user-service
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/product-service
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/order-service
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/payment-service
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/search-service
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/notification-service
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+          
+    - name: Build and push Frontend
+      uses: docker/build-push-action@v5
+      with:
+        context: ./services/frontend
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend:${{ steps.meta.outputs.version }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Build and push API Gateway
+      uses: docker/build-push-action@v5
+      with:
+        context: ./services/api-gateway
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api-gateway:${{ steps.meta.outputs.version }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Build and push User Service
+      uses: docker/build-push-action@v5
+      with:
+        context: ./services/user-service
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/user-service:${{ steps.meta.outputs.version }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Build and push Product Service
+      uses: docker/build-push-action@v5
+      with:
+        context: ./services/product-service
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/product-service:${{ steps.meta.outputs.version }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Build and push Order Service
+      uses: docker/build-push-action@v5
+      with:
+        context: ./services/order-service
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/order-service:${{ steps.meta.outputs.version }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Build and push Payment Service
+      uses: docker/build-push-action@v5
+      with:
+        context: ./services/payment-service
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/payment-service:${{ steps.meta.outputs.version }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Build and push Search Service
+      uses: docker/build-push-action@v5
+      with:
+        context: ./services/search-service
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/search-service:${{ steps.meta.outputs.version }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Build and push Notification Service
+      uses: docker/build-push-action@v5
+      with:
+        context: ./services/notification-service
+        push: true
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/notification-service:${{ steps.meta.outputs.version }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # Deploy to Dev Environment
+  deploy-dev:
+    name: Deploy to Dev Environment
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    environment: dev
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+        
+    - name: Configure kubectl
+      run: |
+        mkdir -p $HOME/.kube
+        echo "${{ secrets.KUBE_CONFIG_DEV }}" | base64 -d > $HOME/.kube/config
+        chmod 600 $HOME/.kube/config
+        
+    - name: Update image tags in Kubernetes manifests
+      run: |
+        # Get the latest image tag
+        IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.build-and-push.outputs.version }}"
+        
+        # Update image tags in deployment files
+        find k8s/ -name "*.yaml" -exec sed -i "s|image: electromart/|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/|g" {} \;
+        find k8s/ -name "*.yaml" -exec sed -i "s|:latest|:${{ needs.build-and-push.outputs.version }}|g" {} \;
+        
+    - name: Deploy to Kubernetes
+      run: |
+        # Create namespace if it doesn't exist
+        kubectl create namespace electromart-dev --dry-run=client -o yaml | kubectl apply -f -
+        
+        # Apply Kubernetes manifests
+        kubectl apply -f k8s/namespace.yaml
+        kubectl apply -f k8s/configmap.yaml
+        kubectl apply -f k8s/secrets.yaml
+        
+        # Deploy databases first
+        kubectl apply -f k8s/monitoring/databases.yaml -n electromart-dev
+        
+        # Wait for databases to be ready
+        kubectl wait --for=condition=ready pod -l app=postgres -n electromart-dev --timeout=300s
+        kubectl wait --for=condition=ready pod -l app=mongodb -n electromart-dev --timeout=300s
+        kubectl wait --for=condition=ready pod -l app=redis -n electromart-dev --timeout=300s
+        kubectl wait --for=condition=ready pod -l app=elasticsearch -n electromart-dev --timeout=300s
+        
+        # Deploy monitoring stack
+        kubectl apply -f k8s/monitoring/prometheus-deployment.yaml -n electromart-dev
+        kubectl apply -f k8s/monitoring/grafana-deployment.yaml -n electromart-dev
+        
+        # Deploy services
+        kubectl apply -f k8s/user-service/deployment.yaml -n electromart-dev
+        kubectl apply -f k8s/product-service/deployment.yaml -n electromart-dev
+        kubectl apply -f k8s/order-service/deployment.yaml -n electromart-dev
+        kubectl apply -f k8s/payment-service/deployment.yaml -n electromart-dev
+        kubectl apply -f k8s/search-service/deployment.yaml -n electromart-dev
+        kubectl apply -f k8s/notification-service/deployment.yaml -n electromart-dev
+        kubectl apply -f k8s/api-gateway/deployment.yaml -n electromart-dev
+        kubectl apply -f k8s/frontend/deployment.yaml -n electromart-dev
+        
+        # Deploy ingress
+        kubectl apply -f k8s/ingress.yaml -n electromart-dev
+        
+    - name: Wait for deployment
+      run: |
+        kubectl rollout status deployment/frontend -n electromart-dev --timeout=300s
+        kubectl rollout status deployment/api-gateway -n electromart-dev --timeout=300s
+        kubectl rollout status deployment/user-service -n electromart-dev --timeout=300s
+        kubectl rollout status deployment/product-service -n electromart-dev --timeout=300s
+        kubectl rollout status deployment/order-service -n electromart-dev --timeout=300s
+        kubectl rollout status deployment/payment-service -n electromart-dev --timeout=300s
+        kubectl rollout status deployment/search-service -n electromart-dev --timeout=300s
+        kubectl rollout status deployment/notification-service -n electromart-dev --timeout=300s
+        
+    - name: Health check
+      run: |
+        # Wait a bit for services to be fully ready
+        sleep 30
+        
+        # Check service health endpoints
+        kubectl get pods -n electromart-dev
+        
+        # Test API Gateway health
+        kubectl port-forward svc/api-gateway 8000:8000 -n electromart-dev &
+        sleep 10
+        curl -f http://localhost:8000/health || exit 1
+        pkill -f "kubectl port-forward"
+        
+    - name: Notify deployment status
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Post-deployment tests
+  post-deployment-tests:
+    name: Post-deployment Tests
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+        
+    - name: Configure kubectl
+      run: |
+        mkdir -p $HOME/.kube
+        echo "${{ secrets.KUBE_CONFIG_DEV }}" | base64 -d > $HOME/.kube/config
+        chmod 600 $HOME/.kube/config
+        
+    - name: Run API tests
+      run: |
+        # Port forward to access services
+        kubectl port-forward svc/api-gateway 8000:8000 -n electromart-dev &
+        kubectl port-forward svc/frontend 3000:3000 -n electromart-dev &
+        
+        # Wait for port forwarding
+        sleep 10
+        
+        # Test API endpoints
+        curl -f http://localhost:8000/health
+        curl -f http://localhost:3000
+        
+        # Test service endpoints
+        curl -f http://localhost:8000/api/users/health
+        curl -f http://localhost:8000/api/products/health
+        curl -f http://localhost:8000/api/orders/health
+        
+        # Cleanup
+        pkill -f "kubectl port-forward"
+        
+    - name: Performance test
+      uses: grafana/k6-action@v0.3.0
+      with:
+        filename: performance-tests/load-test.js
+      env:
+        K6_BROWSER_ENABLED: true
+      continue-on-error: true

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payment-service-config
+  namespace: electromart
+data:
+  # Payment Service Configuration
+  PAYMENT_SERVICE_PORT: "8004"
+  REDIS_URL: "redis://shared-redis:6379"
+  
+  # Stripe Configuration
+  STRIPE_CURRENCY: "usd"
+  STRIPE_WEBHOOK_PATH: "/webhook"
+  
+  # Monitoring
+  PROMETHEUS_ENDPOINT: "http://prometheus:9090"

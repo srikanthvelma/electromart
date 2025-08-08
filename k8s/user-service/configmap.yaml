@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-service-config
+  namespace: electromart
+data:
+  # User Service Configuration
+  USER_SERVICE_PORT: "8002"
+  MONGODB_URI: "mongodb://user-mongodb:27017/electromart_users"
+  MONGODB_USER: "admin"
+  
+  # JWT Configuration
+  JWT_EXPIRES_IN: "24h"
+  
+  # Security Configuration
+  BCRYPT_ROUNDS: "12"
+  MAX_LOGIN_ATTEMPTS: "5"
+  LOCKOUT_DURATION: "15"
+  
+  # Monitoring
+  PROMETHEUS_ENDPOINT: "http://prometheus:9090"

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: electromart
+data:
+  # Frontend Configuration
+  REACT_APP_API_URL: "http://api-gateway:8000"
+  REACT_APP_WS_URL: "ws://api-gateway:8000"
+  
+  # Environment Configuration
+  NODE_ENV: "production"

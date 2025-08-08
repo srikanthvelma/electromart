@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: product-service-config
+  namespace: electromart
+data:
+  # Product Service Configuration
+  PRODUCT_SERVICE_PORT: "8001"
+  POSTGRES_URL: "postgresql://postgres:password@product-postgres:5432/electromart_products"
+  POSTGRES_USER: "postgres"
+  
+  # Database Configuration
+  DATABASE_NAME: "electromart_products"
+  
+  # Monitoring
+  PROMETHEUS_ENDPOINT: "http://prometheus:9090"

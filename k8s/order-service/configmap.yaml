@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: order-service-config
+  namespace: electromart
+data:
+  # Order Service Configuration
+  ORDER_SERVICE_PORT: "8003"
+  POSTGRES_URL: "postgresql://postgres:password@order-postgres:5432/electromart_orders"
+  POSTGRES_USER: "postgres"
+  
+  # Database Configuration
+  DATABASE_NAME: "electromart_orders"
+  
+  # Service URLs
+  USER_SERVICE_URL: "http://user-service:8002"
+  PRODUCT_SERVICE_URL: "http://product-service:8001"
+  PAYMENT_SERVICE_URL: "http://payment-service:8004"
+  NOTIFICATION_SERVICE_URL: "http://notification-service:8006"
+  
+  # Monitoring
+  PROMETHEUS_ENDPOINT: "http://prometheus:9090"

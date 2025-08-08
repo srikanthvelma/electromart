@@ -1,0 +1,95 @@
+# PostgreSQL Deployment for Product Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-postgres
+  namespace: electromart
+  labels:
+    app: product-postgres
+    service: product-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-postgres
+  template:
+    metadata:
+      labels:
+        app: product-postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          value: "electromart_products"
+        - name: POSTGRES_USER
+          value: "postgres"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: product-service-secrets
+              key: POSTGRES_PASSWORD
+        volumeMounts:
+        - name: product-postgres-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: product-postgres-storage
+        persistentVolumeClaim:
+          claimName: product-postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-postgres
+  namespace: electromart
+  labels:
+    app: product-postgres
+    service: product-service
+spec:
+  selector:
+    app: product-postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: product-postgres-pvc
+  namespace: electromart
+  labels:
+    service: product-service
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

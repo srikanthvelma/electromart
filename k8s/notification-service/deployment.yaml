@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: notification-service
+  namespace: electromart
+  labels:
+    app: notification-service
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: notification-service
+  template:
+    metadata:
+      labels:
+        app: notification-service
+        version: v1
+    spec:
+      containers:
+      - name: notification-service
+        image: electromart/notification-service:latest
+        ports:
+        - containerPort: 8006
+        env:
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: notification-service-config
+              key: NOTIFICATION_SERVICE_PORT
+        - name: MONGODB_URI
+          valueFrom:
+            configMapKeyRef:
+              name: notification-service-config
+              key: MONGODB_URI
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: notification-service-config
+              key: REDIS_URL
+        - name: SMTP_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: notification-service-config
+              key: SMTP_HOST
+        - name: SMTP_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: notification-service-config
+              key: SMTP_PORT
+        - name: SMTP_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: notification-service-config
+              key: SMTP_USERNAME
+        - name: SMTP_FROM_EMAIL
+          valueFrom:
+            configMapKeyRef:
+              name: notification-service-config
+              key: SMTP_FROM_EMAIL
+        - name: TWILIO_PHONE_NUMBER
+          valueFrom:
+            configMapKeyRef:
+              name: notification-service-config
+              key: TWILIO_PHONE_NUMBER
+        - name: SMTP_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: notification-service-secrets
+              key: SMTP_PASSWORD
+        - name: TWILIO_ACCOUNT_SID
+          valueFrom:
+            secretKeyRef:
+              name: notification-service-secrets
+              key: TWILIO_ACCOUNT_SID
+        - name: TWILIO_AUTH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: notification-service-secrets
+              key: TWILIO_AUTH_TOKEN
+        - name: MONGODB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: notification-service-secrets
+              key: MONGODB_PASSWORD
+        - name: USER_SERVICE_URL
+          value: "http://user-service:8002"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8006
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8006
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  namespace: electromart
+  labels:
+    app: notification-service
+spec:
+  selector:
+    app: notification-service
+  ports:
+  - port: 8006
+    targetPort: 8006
+    protocol: TCP
+  type: ClusterIP

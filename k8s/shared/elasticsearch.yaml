@@ -1,0 +1,88 @@
+# Shared Elasticsearch Deployment for Search Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shared-elasticsearch
+  namespace: electromart
+  labels:
+    app: shared-elasticsearch
+    type: shared
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: shared-elasticsearch
+  template:
+    metadata:
+      labels:
+        app: shared-elasticsearch
+    spec:
+      containers:
+      - name: elasticsearch
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+        ports:
+        - containerPort: 9200
+        env:
+        - name: discovery.type
+          value: single-node
+        - name: xpack.security.enabled
+          value: "false"
+        - name: "ES_JAVA_OPTS"
+          value: "-Xms512m -Xmx512m"
+        volumeMounts:
+        - name: shared-elasticsearch-storage
+          mountPath: /usr/share/elasticsearch/data
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /_cluster/health
+            port: 9200
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /_cluster/health
+            port: 9200
+          initialDelaySeconds: 30
+          periodSeconds: 5
+      volumes:
+      - name: shared-elasticsearch-storage
+        persistentVolumeClaim:
+          claimName: shared-elasticsearch-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: shared-elasticsearch
+  namespace: electromart
+  labels:
+    app: shared-elasticsearch
+    type: shared
+spec:
+  selector:
+    app: shared-elasticsearch
+  ports:
+  - port: 9200
+    targetPort: 9200
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: shared-elasticsearch-pvc
+  namespace: electromart
+  labels:
+    type: shared
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
